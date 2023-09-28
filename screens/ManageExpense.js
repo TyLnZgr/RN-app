@@ -1,11 +1,16 @@
-import { useContext, useLayoutEffect } from "react";
+import { useContext, useLayoutEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import IconButton from "../components/UI/IconButton";
 import { GlobalStyles } from "../constants/styles";
 import { ExpensesContext } from "../store/expenses-context";
 import ExpenseForm from "../components/ManageExpense/ExpenseForm";
+import { storeExpense, updateExpense, deletedExpense } from "../util/http";
+import Loading from "../components/UI/Loading";
+import Error from "../components/UI/Error";
 
 function ManageExpense({ route, navigation }) {
+  const [isSubmmiting, setIsSubmiting] = useState(false);
+  const [error, setError] = useState();
   const expenseCTX = useContext(ExpensesContext);
   const editedExpenseId = route.params?.expenseId;
   const isEditing = !!editedExpenseId;
@@ -17,21 +22,43 @@ function ManageExpense({ route, navigation }) {
       title: isEditing ? "Edit Expense" : "Add Expense",
     });
   }, [navigation, isEditing]);
-  const deleteExpense = () => {
-    expenseCTX.deleteExpense(editedExpenseId);
-    navigation.goBack();
+  const deleteExpense = async () => {
+    setIsSubmiting(true);
+    try {
+      await deletedExpense(editedExpenseId);
+      expenseCTX.deleteExpense(editedExpenseId);
+      navigation.goBack();
+    } catch (error) {
+      setError("could not delete expense- please try again later");
+      setIsSubmiting(false);
+    }
   };
   const cancelHandle = () => {
     navigation.goBack();
   };
-  const confirmHandle = (expenseData) => {
-    if (isEditing) {
-      expenseCTX.updateExpense(editedExpenseId, expenseData);
-    } else {
-      expenseCTX.addExpense(expenseData);
+  const confirmHandle = async (expenseData) => {
+    setIsSubmiting(true);
+    try {
+      if (isEditing) {
+        expenseCTX.updateExpense(editedExpenseId, expenseData);
+        updateExpense(editedExpenseId, expenseData);
+      } else {
+        const id = await storeExpense(expenseData);
+        expenseCTX.addExpense({ ...expenseData, id: id });
+      }
+      navigation.goBack();
+    } catch (error) {
+      setError("could not update data - please try again later");
+      setIsSubmiting(false);
     }
-    navigation.goBack();
   };
+  if (isSubmmiting) {
+    return <Loading />;
+  }
+
+  if (error && !isFetching) {
+    return <Error message={error} />;
+  }
   return (
     <View style={styles.container}>
       <ExpenseForm
